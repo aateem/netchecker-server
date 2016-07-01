@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netchecker-server
+  labels:
+    app: netchecker-server
+spec:
+  containers:
+    - name: netchecker-server
+      image: 127.0.0.1:31500/netchecker/server:latest
+      env:
+      imagePullPolicy: Always
+      ports:
+        - containerPort: 8081
+          hostPort: 8081
