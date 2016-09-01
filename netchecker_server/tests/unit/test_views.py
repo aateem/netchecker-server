@@ -1,5 +1,8 @@
+import datetime
+
 from flask import url_for, json
 import pytest
+import requests_mock
 
 from netchecker_server import application
 
@@ -10,10 +13,11 @@ def client():
 
 
 @pytest.fixture
-def prefiled_records(request):
+def prefilled_records(request):
+    now = datetime.datetime.now()
     expected_data = {
-        'agent_one': {'key': 'value'},
-        'agent_two': {'different_key': 'different_value'},
+        'agent_one': {'key': 'value', 'last_updated': now},
+        'agent_two': {'key': 'different_value', 'last_updated': now},
     }
     application.RECORDS.update(expected_data)
 
@@ -41,6 +45,14 @@ def agent_one_url():
     return url
 
 
+@pytest.fixture
+def connectivity_check_url():
+    with application.app.test_request_context():
+        url = url_for('check_connectivity')
+
+    return url
+
+
 def test_get_agents_from_empty_records(client, agents_url):
     resp = client.get(agents_url)
     data = json.loads(resp.get_data())
@@ -48,10 +60,15 @@ def test_get_agents_from_empty_records(client, agents_url):
 
 
 def test_get_on_agents_returns_all_records(client, agents_url,
-                                           prefiled_records):
+                                           prefilled_records):
     resp = client.get(agents_url)
     data = json.loads(resp.get_data())
-    assert data == prefiled_records
+    exact_keys = ('key',)
+    for agent in data:
+        for key in exact_keys:
+            assert data[agent][key] == prefilled_records[agent][key]
+
+        assert data[agent]['last_updated']
 
 
 def test_get_returns_404_on_non_existing_obj(client, agent_one_url):
@@ -59,12 +76,12 @@ def test_get_returns_404_on_non_existing_obj(client, agent_one_url):
     assert resp.status_code == 404
 
 
-def test_get_returns_proper_value(client, agent_one_url, prefiled_records):
+def test_get_returns_proper_value(client, agent_one_url, prefilled_records):
     resp = client.get(agent_one_url)
     data = json.loads(resp.get_data())
-
-    assert len(data) == 1
-    assert data == prefiled_records['agent_one']
+    exact_keys = ('key',)
+    for key in exact_keys:
+        assert data[key] == prefilled_records['agent_one'][key]
 
 
 def test_put_is_not_allowed(client, agents_url):
@@ -88,10 +105,11 @@ def test_set_record(client, agent_one_url):
                        content_type='application/json')
 
     assert resp.status_code == 200
+    assert resp.data.decode('utf-8') == u"Record was set"
     assert application.RECORDS.get('agent_one') is not None
 
 
-def test_post_overrides_data(client, agent_one_url, prefiled_records):
+def test_post_overrides_data(client, agent_one_url, prefilled_records):
     expected = {'key_three': 'value_three'}
     resp = client.post(agent_one_url, data=json.dumps(expected),
                        content_type='application/json')
@@ -100,3 +118,56 @@ def test_post_overrides_data(client, agent_one_url, prefiled_records):
 
     for key in expected:
         assert expected[key] == application.RECORDS['agent_one'][key]
+
+
+@pytest.fixture
+def k8s_pods():
+    return {
+        'items': [
+            {'metadata': {'name': 'agent_one'}},
+            {'metadata': {'name': 'agent_two'}}
+        ]
+    }
+
+
+def get_connectivity_resp(client, url, mock_resp_json):
+    with requests_mock.Mocker() as m:
+        m.register_uri('GET', application.K8S_API_URL + 'pods',
+                       json=mock_resp_json)
+
+        resp = client.get(url)
+
+    return resp
+
+
+def check_error_resp(resp):
+    assert resp.status_code == 400
+    assert resp.data.decode('utf-8') == \
+        u'There is no network connectivity with pods agent_two'
+
+
+def test_check_connectivity_success(client, connectivity_check_url,
+                                    prefilled_records, k8s_pods):
+
+    resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
+    assert resp.status_code == 204
+
+
+def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
+                                                  connectivity_check_url,
+                                                  k8s_pods):
+    del application.RECORDS['agent_two']
+    resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
+    check_error_resp(resp)
+
+
+def test_check_cnnty_agent_response_is_outdated(client, prefilled_records,
+                                                connectivity_check_url,
+                                                k8s_pods):
+    outdated = (
+        application.RECORDS['agent_two']['last_updated'] -
+        datetime.timedelta(minutes=3)
+    )
+    application.RECORDS['agent_two']['last_updated'] = outdated
+    resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
+    check_error_resp(resp)
