@@ -29,10 +29,16 @@ kubectl create -f k8s_resources/netchecker-server_pod.yaml
 kubectl create -f k8s_resources/netchecker-server_svc.yaml
 ```
 
-* Check status:
+* Check check reports from the agents:
 
 ```bash
 curl -s localhost:31081/api/v1/agents/
+```
+
+* Check connectivity between the agents and the server:
+
+```bash
+curl localhost:31081/api/v1/connectivity_check
 ```
 
 Examples
