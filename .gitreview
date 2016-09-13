@@ -1,4 +1,4 @@
 [gerrit]
 host=review.fuel-infra.org
 port=29418
-project=nextgen/mcp-netchecker-server.git
+project=mcp-netchecker/mcp-netchecker-server.git
