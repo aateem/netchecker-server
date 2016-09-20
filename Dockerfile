@@ -1,6 +1,6 @@
 FROM frolvlad/alpine-python2:latest
 
-MAINTAINER Artem Roma version: 0.2
+MAINTAINER Artem Roma version: 0.1
 
 ADD . /usr/src/app/network-checker
 
