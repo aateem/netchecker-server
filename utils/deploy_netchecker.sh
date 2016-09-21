@@ -10,28 +10,101 @@ fi
 kubectl get nodes
 
 echo "Installing netchecker server"
-git clone https://github.com/aateem/netchecker-server.git
-pushd netchecker-server
-  docker build -t 127.0.0.1:31500/netchecker/server:latest .
-  docker push 127.0.0.1:31500/netchecker/server:latest
-
-  kubectl create -f k8s_resources/netchecker-server_pod.yaml $NS
-  kubectl create -f k8s_resources/netchecker-server_svc.yaml $NS
-popd
+echo '
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netchecker-server
+  labels:
+    app: netchecker-server
+spec:
+  containers:
+    - name: netchecker-server
+      image: l23network/mcp-netchecker-server
+      env:
+      imagePullPolicy: Always
+      ports:
+        - containerPort: 8081
+          hostPort: 8081
+    - name: kubectl-proxy
+      image: "gcr.io/google_containers/kubectl:v0.18.0-120-gaeb4ac55ad12b1-dirty"
+      imagePullPolicy: "Always"
+      args:
+        - "proxy"
+---
+kind: "Service"
+apiVersion: "v1"
+metadata:
+  name: "netchecker-service"
+spec:
+  selector:
+    app: "netchecker-server"
+  ports:
+    -
+      protocol: "TCP"
+      port: 8081
+      targetPort: 8081
+      nodePort: 31081
+  type: "NodePort"
+' | kubectl create -f - $NS
 
 echo "Installing netchecker agents"
-git clone https://github.com/aateem/netchecker-agent.git
-pushd netchecker-agent
-  pushd docker
-    docker build -t 127.0.0.1:31500/netchecker/agent:latest .
-    docker push 127.0.0.1:31500/netchecker/agent:latest
-  popd
-  kubectl get nodes | grep Ready | awk '{print $1}' | xargs -I {} kubectl label nodes {} netchecker=agent
-  kubectl create -f netchecker-agent.yaml $NS
-popd
+kubectl get nodes | grep Ready | awk '{print $1}' | xargs -I {} kubectl label nodes {} netchecker=agent
+
+echo '
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  labels:
+    app: netchecker-agent-hostnet
+  name: netchecker-agent
+spec:
+  template:
+    metadata:
+      name: netchecker-agent
+      labels:
+        app: netchecker-agent
+    spec:
+      containers:
+        - name: netchecker-agent
+          image: l23network/mcp-netchecker-agent
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          imagePullPolicy: Always
+      nodeSelector:
+        netchecker: agent
+---
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  labels:
+    app: netchecker-agent-hostnet
+  name: netchecker-agent-hostnet
+spec:
+  template:
+    metadata:
+      name: netchecker-agent-hostnet
+      labels:
+        app: netchecker-agent-hostnet
+    spec:
+      hostNetwork: True
+      containers:
+        - name: netchecker-agent
+          image: l23network/mcp-netchecker-agent
+          env:
+            - name: MY_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          imagePullPolicy: Always
+      nodeSelector:
+        netchecker: agent
+' | kubectl create -f - $NS
 
 echo "DONE"
-echo
 echo "use the following commands to "
 echo "- check agents responses:"
 echo "curl -s -X GET 'http://localhost:31081/api/v1/agents/' | python -mjson.tool"
