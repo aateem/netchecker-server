@@ -143,14 +143,21 @@ def get_connectivity_resp(client, url, mock_resp_json):
 def check_error_resp(resp):
     assert resp.status_code == 400
     assert resp.data.decode('utf-8') == \
-        u'There is no network connectivity with pods agent_two'
+        (u"Pods without responses - [agent_two]. "
+         u"Pods with outdated responses - [].")
 
 
 def test_check_connectivity_success(client, connectivity_check_url,
                                     prefilled_records, k8s_pods):
 
     resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
-    assert resp.status_code == 204
+    assert resp.status_code == 200
+    data = json.loads(resp.get_data())
+    assert data['message'] == (
+        u'All {} pods successfully reported back to the server'
+        .format(len(application.RECORDS))
+    )
+    assert data['reported_agents_count'] == len(application.RECORDS)
 
 
 def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
@@ -158,16 +165,50 @@ def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
                                                   k8s_pods):
     del application.RECORDS['agent_two']
     resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
-    check_error_resp(resp)
+
+    assert resp.status_code == 400
+
+    data = json.loads(resp.get_data())
+    assert data['message'] == \
+        u'Connectivity check fails for pods [agent_two]'
+    assert data['absent'] == ['agent_two']
+    assert data['outdated'] == []
+
+
+def make_outdated(agent):
+    outdated = (
+        application.RECORDS[agent]['last_updated'] -
+        datetime.timedelta(minutes=3)
+    )
+    application.RECORDS[agent]['last_updated'] = outdated
 
 
 def test_check_cnnty_agent_response_is_outdated(client, prefilled_records,
                                                 connectivity_check_url,
                                                 k8s_pods):
-    outdated = (
-        application.RECORDS['agent_two']['last_updated'] -
-        datetime.timedelta(minutes=3)
-    )
-    application.RECORDS['agent_two']['last_updated'] = outdated
+    make_outdated('agent_two')
     resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
-    check_error_resp(resp)
+
+    assert resp.status_code == 400
+
+    data = json.loads(resp.get_data())
+    assert data['message'] == \
+        u'Connectivity check fails for pods [agent_two]'
+    assert data['absent'] == []
+    assert data['outdated'] == ['agent_two']
+
+
+def test_check_cnnty_and_outdated_in_response(client, prefilled_records,
+                                              connectivity_check_url,
+                                              k8s_pods):
+    del application.RECORDS['agent_two']
+    make_outdated('agent_one')
+    resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
+
+    assert resp.status_code == 400
+    data = json.loads(resp.get_data())
+    assert u'Connectivity check fails for pods' in data['message']
+    assert u'agent_one' in data['message']
+    assert u'agent_two' in data['message']
+    assert data['absent'] == ['agent_two']
+    assert data['outdated'] == ['agent_one']

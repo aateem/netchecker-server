@@ -8,7 +8,8 @@ setuptools.setup(
     author='Mirantis Inc.',
     license='Apache License, Version 2.0',
     packages=setuptools.find_packages(),
-    install_requires=['flask', 'requests', 'waitress', 'wsgi-request-logger'],
+    install_requires=['flask', 'requests', 'waitress', 'six',
+                      'wsgi-request-logger'],
     entry_points={
         'console_scripts': [
             'netchecker-server = netchecker_server.server:run'
