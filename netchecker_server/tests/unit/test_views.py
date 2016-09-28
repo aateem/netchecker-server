@@ -124,8 +124,14 @@ def test_post_overrides_data(client, agent_one_url, prefilled_records):
 def k8s_pods():
     return {
         'items': [
-            {'metadata': {'name': 'agent_one'}},
-            {'metadata': {'name': 'agent_two'}}
+            {
+                'metadata': {'name': 'agent_one'},
+                'spec': {'nodeName': 'node_one'}
+            },
+            {
+                'metadata': {'name': 'agent_two'},
+                'spec': {'nodeName': 'node_two'}
+            },
         ]
     }
 
@@ -138,13 +144,6 @@ def get_connectivity_resp(client, url, mock_resp_json):
         resp = client.get(url)
 
     return resp
-
-
-def check_error_resp(resp):
-    assert resp.status_code == 400
-    assert resp.data.decode('utf-8') == \
-        (u"Pods without responses - [agent_two]. "
-         u"Pods with outdated responses - [].")
 
 
 def test_check_connectivity_success(client, connectivity_check_url,
@@ -160,6 +159,17 @@ def test_check_connectivity_success(client, connectivity_check_url,
     assert data['reported_agents_count'] == len(application.RECORDS)
 
 
+def test_check_empty_pod_list_from_k8s_api_error(client, prefilled_records,
+                                                 connectivity_check_url):
+    empty_pods_json = {'items': []}
+    resp = get_connectivity_resp(client, connectivity_check_url,
+                                 empty_pods_json)
+
+    assert resp.status_code == 400
+    assert resp.data.decode('utf-8') == \
+        u'There are no pods of network-checker agent'
+
+
 def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
                                                   connectivity_check_url,
                                                   k8s_pods):
@@ -170,8 +180,8 @@ def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
 
     data = json.loads(resp.get_data())
     assert data['message'] == \
-        u'Connectivity check fails for pods [agent_two]'
-    assert data['absent'] == ['agent_two']
+        u'Connectivity check fails. Inspect the payload for details.'
+    assert data['absent'] == [{'name': 'agent_two', 'node': 'node_two'}]
     assert data['outdated'] == []
 
 
@@ -193,9 +203,9 @@ def test_check_cnnty_agent_response_is_outdated(client, prefilled_records,
 
     data = json.loads(resp.get_data())
     assert data['message'] == \
-        u'Connectivity check fails for pods [agent_two]'
+        u'Connectivity check fails. Inspect the payload for details.'
     assert data['absent'] == []
-    assert data['outdated'] == ['agent_two']
+    assert data['outdated'] == [{'name': 'agent_two', 'node': 'node_two'}]
 
 
 def test_check_cnnty_and_outdated_in_response(client, prefilled_records,
@@ -207,8 +217,7 @@ def test_check_cnnty_and_outdated_in_response(client, prefilled_records,
 
     assert resp.status_code == 400
     data = json.loads(resp.get_data())
-    assert u'Connectivity check fails for pods' in data['message']
-    assert u'agent_one' in data['message']
-    assert u'agent_two' in data['message']
-    assert data['absent'] == ['agent_two']
-    assert data['outdated'] == ['agent_one']
+    assert data['message'] == \
+        u'Connectivity check fails. Inspect the payload for details.'
+    assert data['absent'] == [{'name': 'agent_two', 'node': 'node_two'}]
+    assert data['outdated'] == [{'name': 'agent_one', 'node': 'node_one'}]

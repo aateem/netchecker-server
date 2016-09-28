@@ -5,7 +5,6 @@ from flask import jsonify
 from flask import Flask
 from flask import request
 import requests
-import six
 
 from netchecker_server import exceptions
 
@@ -69,20 +68,27 @@ def check_connectivity():
         'labelSelector': 'app in (netchecker-agent, netchecker-agent-hostnet)'
     }
     pods_from_api = requests.get(K8S_API_URL + 'pods', query_params)
-    pod_names = set([
-        pod['metadata']['name'] for pod in pods_from_api.json()['items']
-    ])
+    pod_data = pods_from_api.json().get('items')
 
-    absent_pods = pod_names - set(six.iterkeys(RECORDS))
-    outdated_pods = set([
-        pod for pod in pod_names - absent_pods if outdated_resp(pod)])
+    if not pod_data:
+        return ('There are no pods of network-checker agent', 400)
+
+    absent_pods = []
+    outdated_pods = []
+
+    for pod in pod_data:
+        pod_name = pod['metadata']['name']
+        pod_node = pod['spec']['nodeName']
+
+        if pod_name not in RECORDS:
+            absent_pods.append({'name': pod_name, 'node': pod_node})
+        elif outdated_resp(pod_name):
+            outdated_pods.append({'name': pod_name, 'node': pod_node})
 
     if absent_pods or outdated_pods:
         raise exceptions.ConnectivityCheckError(
-            'Connectivity check fails for pods [{}]'
-            .format(', '.join(absent_pods | outdated_pods)),
-            payload={'absent': list(absent_pods),
-                     'outdated': list(outdated_pods)}
+            'Connectivity check fails. Inspect the payload for details.',
+            payload={'absent': absent_pods, 'outdated': outdated_pods}
         )
 
     return jsonify(
