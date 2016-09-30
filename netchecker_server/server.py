@@ -1,10 +1,16 @@
 import argparse
 import logging
+import signal
+import sys
 
 from requestlogger import WSGILogger, ApacheFormatter
 from waitress import serve
 
 from netchecker_server.application import app
+
+
+def sigterm_handler(_signo, _stack_frame):
+    sys.exit(0)
 
 
 def run():
@@ -19,6 +25,7 @@ def run():
     # propagate == False - do not propagate debug log messages
     # from requestlogger to root logger's stream handler
     logging_app = WSGILogger(app, handlers, ApacheFormatter(), propagate=False)
+    signal.signal(signal.SIGTERM, sigterm_handler)
     serve(logging_app, host=args.ip, port=args.port)
 
 

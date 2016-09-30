@@ -10,7 +10,24 @@ You can use simple `curl` to get status (see below).
 
 How to
 ------
-* Build and push container:
+* Quick install server and agents to the `kube-system` namespace and store
+manifests to the `/etc/kubernetes` dir:
+```bash
+# KUBE_DIR=/etc/kubernetes bash utils/deploy_netchecker.sh kube-system
+```
+With a custom namespace, node port, report interval and chown manifests for
+the `kube` user:
+```bash
+# NODE_PORT=31082 KUBE_DIR=/etc/kubernetes KUBE_USER=kube bash \
+  utils/deploy_netchecker.sh default
+```
+Purge application:
+```bash
+# PURGE=true KUBE_DIR=/etc/kubernetes bash \
+  utils/deploy_netchecker.sh default
+```
+
+* Build server and push container:
 
 ```bash
 docker build -t 127.0.0.1:31500/netchecker/server:latest .
@@ -39,6 +56,10 @@ curl -s localhost:31081/api/v1/agents/
 
 ```bash
 curl localhost:31081/api/v1/connectivity_check
+```
+or with utils and a custom node port:
+```bash
+NODE_PORT=31082 bash utils/wait_and_check.sh
 ```
 
 Examples
