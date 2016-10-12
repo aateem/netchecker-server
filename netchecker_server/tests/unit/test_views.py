@@ -16,8 +16,10 @@ def client():
 def prefilled_records(request):
     now = datetime.datetime.now()
     expected_data = {
-        'agent_one': {'key': 'value', 'last_updated': now},
-        'agent_two': {'key': 'different_value', 'last_updated': now},
+        'agent_one': {'key': 'value', 'last_updated': now,
+                      'report_interval': '30'},
+        'agent_two': {'key': 'different_value', 'last_updated': now,
+                      'report_interval': '60'},
     }
     application.RECORDS.update(expected_data)
 
@@ -186,10 +188,11 @@ def test_check_cnnty_agent_not_present_in_records(client, prefilled_records,
 
 
 def make_outdated(agent):
-    outdated = (
-        application.RECORDS[agent]['last_updated'] -
-        datetime.timedelta(minutes=3)
-    )
+    t_delta = datetime.timedelta(
+        seconds=2*int(application.RECORDS[agent]['report_interval'])+1)
+
+    outdated = application.RECORDS[agent]['last_updated'] - t_delta
+
     application.RECORDS[agent]['last_updated'] = outdated
 
 
@@ -216,6 +219,7 @@ def test_check_cnnty_and_outdated_in_response(client, prefilled_records,
     resp = get_connectivity_resp(client, connectivity_check_url, k8s_pods)
 
     assert resp.status_code == 400
+
     data = json.loads(resp.get_data())
     assert data['message'] == \
         u'Connectivity check fails. Inspect the payload for details.'

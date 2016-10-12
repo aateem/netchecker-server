@@ -41,7 +41,9 @@ def make_record(record_id, record_data):
 def outdated_resp(agent_id):
     return(
         datetime.datetime.now() - RECORDS[agent_id]['last_updated']
-        > datetime.timedelta(minutes=2)
+        # let's take double interval to accomodate possible delays of requests
+        > datetime.timedelta(
+            seconds=2*int(RECORDS[agent_id]['report_interval']))
     )
 
 

@@ -21,7 +21,6 @@ spec:
   containers:
     - name: netchecker-server
       image: l23network/mcp-netchecker-server
-      env:
       imagePullPolicy: Always
       ports:
         - containerPort: 8081
@@ -51,7 +50,7 @@ spec:
 echo "Installing netchecker agents"
 kubectl get nodes | grep Ready | awk '{print $1}' | xargs -I {} kubectl label nodes {} netchecker=agent
 
-echo '
+echo "
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
@@ -73,6 +72,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: REPORT_INTERVAL
+              value: ${AGENT_REPORT_INTERVAL:-60}
           imagePullPolicy: Always
       nodeSelector:
         netchecker: agent
@@ -99,10 +100,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: REPORT_INTERVAL
+              value: ${AGENT_REPORT_INTERVAL:-60}
           imagePullPolicy: Always
       nodeSelector:
         netchecker: agent
-' | kubectl create -f - $NS
+" | kubectl create -f - $NS
 
 echo "DONE"
 echo "use the following commands to "
