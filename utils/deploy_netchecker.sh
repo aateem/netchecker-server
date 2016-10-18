@@ -73,7 +73,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: REPORT_INTERVAL
-              value: ${AGENT_REPORT_INTERVAL:-60}
+              value: '${AGENT_REPORT_INTERVAL:-60}'
           imagePullPolicy: Always
       nodeSelector:
         netchecker: agent
@@ -101,7 +101,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: REPORT_INTERVAL
-              value: ${AGENT_REPORT_INTERVAL:-60}
+              value: '${AGENT_REPORT_INTERVAL:-60}'
           imagePullPolicy: Always
       nodeSelector:
         netchecker: agent
