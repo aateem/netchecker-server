@@ -20,7 +20,7 @@ metadata:
 spec:
   containers:
     - name: netchecker-server
-      image: l23network/mcp-netchecker-server
+      image: quay.io/l23network/mcp-netchecker-server
       imagePullPolicy: Always
       ports:
         - containerPort: 8081
@@ -66,7 +66,7 @@ spec:
     spec:
       containers:
         - name: netchecker-agent
-          image: l23network/mcp-netchecker-agent
+          image: quay.io/l23network/mcp-netchecker-agent
           env:
             - name: MY_POD_NAME
               valueFrom:
@@ -94,7 +94,7 @@ spec:
       hostNetwork: True
       containers:
         - name: netchecker-agent
-          image: l23network/mcp-netchecker-agent
+          image: quay.io/l23network/mcp-netchecker-agent
           env:
             - name: MY_POD_NAME
               valueFrom:
